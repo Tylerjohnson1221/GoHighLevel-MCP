@@ -7,6 +7,8 @@ import express from 'express';
 import cors from 'cors';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { randomUUID } from 'node:crypto';
 import { 
   CallToolRequestSchema,
   ErrorCode,
@@ -690,6 +692,19 @@ class GHLMCPHttpServer {
       // Test GHL API connection
       await this.testGHLConnection();
       
+      // --- Streamable HTTP endpoint for Claude (modern MCP transport) ---
+      const streamableTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID()
+      });
+      await this.server.connect(streamableTransport);
+      const handleStreamable = async (req: express.Request, res: express.Response) => {
+        await streamableTransport.handleRequest(req, res, req.body);
+      };
+      this.app.post('/mcp', handleStreamable);
+      this.app.get('/mcp', handleStreamable);
+      this.app.delete('/mcp', handleStreamable);
+      console.log('\ud83d\udd17 Streamable HTTP Endpoint: /mcp (for Claude)');
+
       // Start HTTP server
       this.app.listen(this.port, '0.0.0.0', () => {
         console.log('✅ GoHighLevel MCP HTTP Server started successfully!');
